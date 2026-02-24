@@ -1,38 +1,64 @@
-# PromptHMR Integration with GMR
-
 This guide documents the integration of **PromptHMR** results into the **GMR (General Motion Retargeting)** system, specifically for retargeting high-quality human motion captured from video to the **Unitree G1** robot.
 
-## 1. Prerequisites
+## 1. Workflow Overview
 
-- **GMR** installed in `~/Documents/unitree/GMR`
-- **PromptHMR** installed in `~/Documents/unitree/PromptHMR`
-- PromptHMR results generated (e.g., in `~/Documents/unitree/PromptHMR/results/boxing/results.pkl`)
+This integration requires **two separate projects** and **two separate virtual environments**. Do not attempt to merge them into a single environment, as they have conflicting dependency requirements (especially PyTorch versions and CUDA extensions).
 
-## 2. Environment Setup
+1.  **PromptHMR (`phmr-env`)**: Used to extract human motion from video.
+2.  **GMR (`gmr-env`)**: Used to retarget those results to the robot.
 
-### Install Dependencies
-PromptHMR results use `joblib` for serialization. Install it in your GMR environment:
+**Installation Order**:
+- First, set up **PromptHMR** following [Step 3](#3-prerequisites) and [readme_uv.md](../PromptHMR/readme_uv.md).
+- Second, set up **GMR** following [Step 3](#3-prerequisites) (GMR Installation section).
 
-```bash
-cd ~/Documents/unitree/GMR
-uv pip install joblib
-```
+## 2. Path Configuration
 
-### Link SMPL-X Body Models
-GMR requires SMPL-X models to process human poses. To save disk space, we link the models already present in PromptHMR:
+Define the paths to your local clones of GMR and PromptHMR:
 
 ```bash
-mkdir -p assets/body_models/smplx
-ln -sf ~/Documents/unitree/PromptHMR/data/body_models/smplx/SMPLX_NEUTRAL.pkl assets/body_models/smplx/
-ln -sf ~/Documents/unitree/PromptHMR/data/body_models/smplx/SMPLX_FEMALE.pkl assets/body_models/smplx/
-ln -sf ~/Documents/unitree/PromptHMR/data/body_models/smplx/SMPLX_MALE.pkl assets/body_models/smplx/
+# Set these variables to your actual installation paths
+export PATH_TO_GMR=~/Documents/unitree/GMR
+export PATH_TO_PROMPTHMR=~/Documents/unitree/PromptHMR
 ```
+
+## 3. Prerequisites
+
+### PromptHMR
+- **Accessible**: The repository must be cloned and located at the path defined by `$PATH_TO_PROMPTHMR`.
+- **Installed**: Environment and dependencies must be set up following [PromptHMR/readme_uv.md](../PromptHMR/readme_uv.md). This includes:
+    - `uv` environment with Python 3.12.
+    - All requirements and pre-compiled wheels installed.
+    - **Body Models** (SMPL/SMPL-X) downloaded via `fetch_smplx.sh`.
+- **Results**: PromptHMR results must be generated (e.g., in `$PATH_TO_PROMPTHMR/results/boxing/results.pkl`).
+
+### GMR
+- **Accessible**: The repository must be cloned and located at the path defined by `$PATH_TO_GMR`.
+- **Installed**: Follow these steps to prepare your GMR environment:
+    ```bash
+    cd $PATH_TO_GMR
+    # 1. Create and activate environment
+    uv venv --python 3.12
+
+    # 2. Install GMR in editable mode
+    uv pip install -e .
+
+    # 3. Install integration dependencies
+    uv pip install joblib
+
+    # 4. Link SMPL-X Body Models
+    # GMR requires SMPL-X models to process human poses. To save disk space,
+    # we link the models already present in PromptHMR:
+    mkdir -p assets/body_models/smplx
+    ln -sf $PATH_TO_PROMPTHMR/data/body_models/smplx/SMPLX_NEUTRAL.pkl assets/body_models/smplx/
+    ln -sf $PATH_TO_PROMPTHMR/data/body_models/smplx/SMPLX_FEMALE.pkl assets/body_models/smplx/
+    ln -sf $PATH_TO_PROMPTHMR/data/body_models/smplx/SMPLX_MALE.pkl assets/body_models/smplx/
+    ```
 
 ---
 
-## 3. Retargeting Script
+## 4. Retargeting Script
 
-We developed a bridge script `scripts/prompthmr_to_robot.py` that translates PromptHMR's complex world-frame results (55 joints, rotation matrices) into the GMR format.
+We developed a bridge script `scripts/prompthmr_to_robot.py` (inside GMR) that translates PromptHMR's complex world-frame results (55 joints, rotation matrices) into the GMR format.
 
 ### Features:
 - Handles **world-frame** and **camera-frame** results from PromptHMR.
@@ -42,17 +68,21 @@ We developed a bridge script `scripts/prompthmr_to_robot.py` that translates Pro
 
 ---
 
-## 4. How to Reproduce
+## 5. How to Reproduce
 
-To retarget PromptHMR boxing results to the Unitree G1:
+To retarget PromptHMR results to the Unitree G1:
+
+Use the same `<your_video_name>` as the one you used in the last step of PromptHMR/readme_uv.md.
 
 ```bash
-# Activate your gmr environment
-source .venv/bin/activate  # or conda activate gmr
+# 1. Activate your GMR environment (from GMR directory)
+cd $PATH_TO_GMR
 
-# Run the retargeting
-python scripts/prompthmr_to_robot.py \
-    --results_file ~/Documents/unitree/PromptHMR/results/boxing/results.pkl \
+export VIDEO_NAME=<your_video_name>
+
+# 2. Run the retargeting script pointing to PromptHMR results
+uv run python scripts/prompthmr_to_robot.py \
+    --results_file $PATH_TO_PROMPTHMR/results/$VIDEO_NAME/results.pkl \
     --robot unitree_g1 \
     --person_idx 0 \
     --rate_limit
@@ -68,7 +98,7 @@ python scripts/prompthmr_to_robot.py \
 
 ---
 
-## 5. Technical Implementation Details
+## 6. Technical Implementation Details
 
 During the integration, the following key steps were taken:
 
