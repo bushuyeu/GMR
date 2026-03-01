@@ -135,13 +135,18 @@ def main():
     )
     
     fps = 30 # Default for PromptHMR/GMR
-    viewer = RobotMotionViewer(
-        robot_type=args.robot,
-        motion_fps=fps,
-        record_video=args.record_video,
-        video_path=args.save_path.replace('.pkl', '.mp4') if args.save_path and args.record_video else "videos/prompthmr_demo.mp4"
-    )
-    
+
+    # Only create viewer when we need visualization (not headless save-only)
+    headless = args.save_path and not args.record_video and not args.loop
+    viewer = None
+    if not headless:
+        viewer = RobotMotionViewer(
+            robot_type=args.robot,
+            motion_fps=fps,
+            record_video=args.record_video,
+            video_path=args.save_path.replace('.pkl', '.mp4') if args.save_path and args.record_video else "videos/prompthmr_demo.mp4"
+        )
+
     if args.save_path:
         os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
         qpos_list = []
@@ -154,25 +159,26 @@ def main():
         else:
             if i >= num_frames:
                 break
-        
+
         # Get frame data in dict format for GMR
         frame_data = get_smplx_data(None, body_model, smplx_output, i)
-        
+
         # Retarget
         qpos = retarget.retarget(frame_data)
-        
-        # Visualize
-        viewer.step(
-            root_pos=qpos[:3],
-            root_rot=qpos[3:7],
-            dof_pos=qpos[7:],
-            human_motion_data=retarget.scaled_human_data,
-            rate_limit=args.rate_limit,
-        )
-        
+
+        # Visualize (skip in headless mode)
+        if viewer is not None:
+            viewer.step(
+                root_pos=qpos[:3],
+                root_rot=qpos[3:7],
+                dof_pos=qpos[7:],
+                human_motion_data=retarget.scaled_human_data,
+                rate_limit=args.rate_limit,
+            )
+
         if args.save_path:
             qpos_list.append(qpos)
-            
+
         i += 1
 
     if args.save_path:
@@ -189,7 +195,8 @@ def main():
             pickle.dump(motion_data, f)
         print(f"Saved to {args.save_path}")
 
-    viewer.close()
+    if viewer is not None:
+        viewer.close()
 
 if __name__ == "__main__":
     main()
